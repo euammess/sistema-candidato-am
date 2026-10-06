@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#12355b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Sistema do Candidato · Apuração AM 2026</title>
+<!--
+  SISTEMA DO CANDIDATO — Apuração AM 2026 (versão mobile)
+  ------------------------------------------------------------------
+  Uso interno da campanha. Material estratégico.
+  Decisão de 06/10/2026: servido pela CENTRAL SESMT01 (api_territorio.py servir --rede), em
+  http://<ip-da-central>:8765/candidato/ , com os dados do banco da central (api_candidato.py).
+  Sem login: o acesso é só pelo link, que a MESA envia a um único usuário.
+  Não precisa de build: um arquivo só.
+
+  Parâmetros (opcionais):
+    ?turno=1         usa o 1º turno (ensaio com dados reais); padrão = 2º turno
+    ?candidato=55    número do candidato acompanhado (padrão 55)
+    ?cargo=governador
+    ?api=https://…   prefixo da API (só para testes; em produção fica vazio = mesmo domínio)
+
+  Abas (#/rota): principal · zonas · areas · municipio · colegios · marcos
+  Fonte: banco da central (totalização do TSE + boletins de urna), via api_candidato.py.
+-->
+<style>
+:root{
+  --navy:#12355b; --navy2:#0d2a49; --amarelo:#f2c94c;
+  --bg:#eef2f6; --card:#fff; --card2:#f6f8fb; --linha:#d9e0e8;
+  --tx:#14202e; --tx2:#47586b; --tx3:#6b7b8d;
+  --ok:#137a3a; --ok-bg:#e3f5e9; --aviso:#9a5b00; --aviso-bg:#fff2d6; --erro:#b42318; --erro-bg:#fde8e6;
+  --cand:#e67700; --adv:#1c3f94;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--tx);font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:16px;line-height:1.35;padding-bottom:40px}
+.num{font-variant-numeric:tabular-nums}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+a{color:inherit}
+
+/* topo */
+.topo{background:var(--navy);color:#fff;padding:14px 16px 12px;position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.marca{display:flex;align-items:center;gap:10px}
+.marca .barras{display:flex;gap:3px}.marca .barras i{width:9px;height:18px;background:var(--amarelo);border-radius:2px}
+.marca h1{font-size:19px;line-height:1.15}
+.marca h1 small{display:block;font-size:13px;font-weight:500;opacity:.85}
+.menu-lin{display:flex;gap:8px;margin-top:10px}
+.bt-menu{flex:1;display:flex;align-items:center;gap:10px;min-height:46px;padding:0 14px;border:1.5px solid rgba(255,255,255,.45);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.02em;text-align:left}
+.bt-menu .ham{display:inline-block;width:20px}
+.bt-menu .ham i{display:block;height:2px;background:#fff;margin:4px 0;border-radius:1px}
+.pill-turno{min-height:46px;padding:0 12px;border-radius:10px;border:1.5px solid rgba(255,255,255,.45);background:transparent;color:#fff;font-weight:700;font-size:14px;white-space:nowrap}
+#menu{display:none;position:fixed;inset:0;z-index:30;background:rgba(10,20,35,.45)}
+#menu.aberto{display:block}
+#menu nav{background:var(--navy2);width:min(86vw,340px);height:100%;padding:16px 10px;overflow:auto}
+#menu nav h2{color:#fff;font-size:14px;opacity:.7;padding:6px 10px 10px;text-transform:uppercase;letter-spacing:.06em}
+#menu nav a{display:block;color:#fff;text-decoration:none;padding:14px 12px;border-radius:10px;font-weight:700;font-size:15px;border-left:4px solid transparent}
+#menu nav a small{display:block;font-weight:500;opacity:.75;font-size:13px}
+#menu nav a.ativo{background:rgba(255,255,255,.1);border-left-color:var(--amarelo)}
+
+/* faixa de status */
+.status{background:#fff;border-bottom:1px solid var(--linha);padding:12px 16px}
+.status .l1{display:flex;align-items:center;gap:12px}
+.selo{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.05em;padding:5px 10px;border-radius:8px;text-transform:uppercase;white-space:nowrap}
+.s-ok{background:var(--ok-bg);color:var(--ok)} .s-and{background:#e6eefb;color:var(--navy)} .s-esp{background:var(--card2);color:var(--tx2)} .s-av{background:var(--aviso-bg);color:var(--aviso)} .s-er{background:var(--erro-bg);color:var(--erro)}
+.trilho{flex:1;height:10px;background:#dfe5ec;border-radius:6px;overflow:hidden}
+.trilho i{display:block;height:100%;background:var(--navy);border-radius:6px;transition:width .5s}
+.status .l2{margin-top:8px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.status .l2 b{font-size:22px}
+.status .l2 span{color:var(--tx2);font-size:14px}
+.status .l3{margin-top:4px;color:var(--tx2);font-size:13px}
+.status .l3 .vivo{color:var(--ok);font-weight:700}
+.status .l3 .vivo.off{color:var(--erro)}
+
+main{padding:14px 12px;overflow-x:hidden}
+.card{background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(16,32,56,.04)}
+.card.acento{border-left:5px solid var(--cand)}
+.card h2{font-size:17px;line-height:1.25}
+.card h2 + .sub{color:var(--tx3);font-size:13px;margin-top:2px}
+.card h3{font-size:15px;margin:14px 0 6px}
+.nota{color:var(--tx3);font-size:12.5px;margin-top:8px}
+.aviso{background:var(--aviso-bg);color:var(--aviso);border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
+.erro{background:var(--erro-bg);color:var(--erro);border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
+.okbox{background:var(--ok-bg);color:var(--ok);border-radius:10px;padding:10px 12px;font-size:14px;margin-top:10px}
+
+/* duelo */
+.cand{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;border:1px solid var(--linha);border-top:4px solid var(--cor,#999);border-radius:12px;padding:12px;margin-top:10px;background:var(--card2)}
+.cand img,.cand .ini{width:56px;height:56px;border-radius:50%;object-fit:cover;flex:none;background:#dfe5ec;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--tx3)}
+.cand .meio{flex:1;min-width:130px}
+.cand .tag{font-size:12px;color:var(--tx3)}
+.cand .tag b{color:var(--cor);font-weight:800}
+.cand .nm{font-weight:800;font-size:17px;line-height:1.2;overflow-wrap:anywhere}
+.cand .pt{color:var(--tx2);font-size:13px}
+.cand .dir{text-align:right;margin-left:auto}
+.cand .pc{font-size:28px;font-weight:900;line-height:1}
+.cand .vt{color:var(--tx2);font-size:13px;margin-top:4px}
+.dif{margin-top:12px;font-size:15px}
+.dif b{font-size:18px}
+
+/* segmentado */
+.seg{display:flex;background:#fff;border:1px solid var(--linha);border-radius:14px;padding:4px;gap:4px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:transparent;border-radius:10px;padding:10px 4px;font-weight:800;font-size:14px;line-height:1.15}
+.seg button small{display:block;font-weight:500;font-size:12px;color:var(--tx3)}
+.seg button.on{background:var(--navy);color:#fff}
+.seg button.on small{color:#fff;opacity:.85}
+
+/* tabelas */
+.tab-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px -14px 0;padding:0 14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--tx3);text-align:left;padding:8px 6px;border-bottom:1px solid var(--linha);white-space:nowrap;cursor:pointer}
+td{padding:9px 6px;border-bottom:1px solid #eef1f5;vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr.sel td{background:#fff6e8}
+tr[data-k]{cursor:pointer}
+.mini{color:var(--tx3);font-size:12px}
+@media (max-width:480px){ .col-sec{display:none} }
+.pos{color:var(--ok);font-weight:700}.neg{color:var(--erro);font-weight:700}
+.chip{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--card2);border:1px solid var(--linha);margin:2px 2px 0 0}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.kpi{background:var(--card2);border-radius:10px;padding:10px}
+.kpi span{display:block;font-size:11.5px;color:var(--tx3);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+.kpi b{font-size:18px}
+.kpi small{color:var(--tx2);font-size:12.5px}
+
+.campo{display:flex;gap:8px;margin-top:8px}
+.campo input,.campo select{flex:1;min-width:0;width:100%;min-height:44px;border:1px solid var(--linha);border-radius:10px;padding:0 12px;background:#fff;font-size:15px}
+.chk{display:grid;grid-template-columns:auto 1fr;gap:8px;padding:8px 0;border-top:1px solid #eef1f5;font-size:14px}
+.chk .ic{font-weight:900;font-size:12px;border-radius:6px;padding:2px 6px;height:fit-content}
+.chk .det{color:var(--tx3);font-size:12.5px}
+.vazio{text-align:center;color:var(--tx2);padding:40px 10px}
+.mais{display:block;width:100%;margin-top:10px;min-height:44px;border:1px solid var(--linha);border-radius:10px;background:#fff;font-weight:700}
+.marco{display:grid;grid-template-columns:62px 1fr;gap:10px;padding:10px 0;border-top:1px solid #eef1f5}
+.marco .h{font-weight:800;font-size:15px}
+.marco .t{font-weight:700}
+.marco .d{color:var(--tx2);font-size:13px}
+footer{color:var(--tx3);font-size:12px;padding:0 16px}
+
+/* ---------- acessibilidade ---------- */
+main,.status,footer{zoom:var(--esc,1)}
+:focus-visible{outline:3px solid var(--amarelo);outline-offset:2px}
+.bt-acess{min-height:46px;min-width:52px;padding:0 10px;border-radius:10px;border:1.5px solid rgba(255,255,255,.45);background:transparent;color:#fff;font-weight:800;font-size:16px}
+#acess{display:none;position:fixed;inset:0;z-index:40;background:rgba(10,20,35,.45);align-items:flex-end}
+#acess.aberto{display:flex}
+#acess .folha{background:var(--card);color:var(--tx);width:100%;border-radius:18px 18px 0 0;padding:18px 16px 26px;max-height:85vh;overflow:auto}
+#acess h2{font-size:18px;margin-bottom:4px}
+#acess .linha-a{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--linha)}
+#acess .linha-a b{display:block;font-size:15px}
+#acess .linha-a small{color:var(--tx3);font-size:13px}
+#acess .grupo{display:flex;gap:8px}
+#acess .grupo button{min-width:52px;min-height:48px;border-radius:10px;border:1.5px solid var(--linha);background:var(--card2);color:var(--tx);font-weight:800;font-size:16px}
+#acess .grupo button[aria-pressed="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
+#acess .fechar{width:100%;margin-top:14px;min-height:50px;border-radius:12px;border:0;background:var(--navy);color:#fff;font-weight:800;font-size:16px}
+.chave{position:relative;width:56px;height:32px;border-radius:16px;border:0;background:#c9d2dc;flex:none}
+.chave::after{content:"";position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .2s}
+.chave[aria-checked="true"]{background:var(--ok)}
+.chave[aria-checked="true"]::after{left:28px}
+/* tema escuro */
+:root[data-tema="escuro"]{--bg:#0d141c;--card:#16202b;--card2:#1d2a37;--linha:#2d3b4a;--tx:#eef3f8;--tx2:#c2cdd8;--tx3:#93a2b2;--ok-bg:#0f2d1c;--ok:#4ade80;--aviso-bg:#33270c;--aviso:#fbbf24;--erro-bg:#3b1414;--erro:#ff8a80}
+:root[data-tema="escuro"] .status,:root[data-tema="escuro"] .seg,:root[data-tema="escuro"] .mais,:root[data-tema="escuro"] .campo input,:root[data-tema="escuro"] .campo select{background:var(--card);color:var(--tx)}
+:root[data-tema="escuro"] tr.sel td{background:#2a2312}
+:root[data-tema="escuro"] .trilho{background:#2d3b4a} :root[data-tema="escuro"] .trilho i{background:#7fb2ff}
+:root[data-tema="escuro"] td{border-bottom-color:var(--linha)}
+:root[data-tema="escuro"] .cand img,:root[data-tema="escuro"] .cand .ini{background:var(--card2);color:var(--tx2)}
+:root[data-tema="escuro"] .s-and{background:#1c2f4d;color:#a9c8ff}
+/* alto contraste (combina com claro ou escuro) */
+:root[data-contraste="alto"]{--tx2:var(--tx);--tx3:var(--tx);--linha:#000}
+:root[data-contraste="alto"][data-tema="escuro"]{--linha:#fff;--bg:#000;--card:#000;--card2:#0b0b0b}
+:root[data-contraste="alto"] .card,:root[data-contraste="alto"] .cand,:root[data-contraste="alto"] .kpi{border-width:2px;border-style:solid;border-color:var(--linha)}
+:root[data-contraste="alto"] .pos{color:#006b25} :root[data-contraste="alto"] .neg{color:#b00000}
+:root[data-contraste="alto"][data-tema="escuro"] .pos{color:#5dff8a} :root[data-contraste="alto"][data-tema="escuro"] .neg{color:#ff7070}
+:root[data-contraste="alto"] th{color:var(--tx);font-weight:800}
+/* menos movimento */
+:root[data-movimento="reduzido"] *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- página principal (modelo do anexo) ---------- */
+.filtros{background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:10px;margin-bottom:12px}
+.filtros .rot{font-size:11.5px;font-weight:800;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin:2px 4px 6px}
+.filtros .seg{margin:0 0 10px;border:0;padding:0;background:transparent}
+.filtros .seg button{border:1.5px solid var(--linha);background:var(--card)}
+.filtros .seg button.on{border-color:var(--navy);background:var(--navy);color:#fff}
+.filtros .seg button.on small{color:#fff;opacity:.85}
+.filtros .seg button[disabled]{opacity:.4}
+.filtros select{width:100%;min-height:46px;border:1.5px solid var(--linha);border-radius:10px;padding:0 12px;background:var(--card);color:var(--tx);font-size:15px;font-weight:700}
+.p-secoes{background:var(--card);border:1.5px solid var(--linha);border-radius:16px;padding:14px 16px;margin-bottom:12px}
+.p-secoes .rot{font-size:12px;font-weight:800;color:var(--tx3);letter-spacing:.06em;text-transform:uppercase}
+.p-secoes .lin{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.p-secoes .big{font-size:36px;font-weight:900;line-height:1.05}
+.p-secoes .lado{text-align:right;color:var(--tx2);font-size:13.5px}
+.p-secoes .lado b{color:var(--tx)}
+.p-secoes .trilho{margin-top:10px;height:14px}
+.p-cand{background:var(--card);border:2px solid var(--linha);border-radius:18px;padding:14px 16px 16px;margin-bottom:12px}
+.p-cand.frente{border-color:var(--navy);background:#eaf0fb}
+:root[data-tema="escuro"] .p-cand.frente{background:#132238;border-color:#7fb2ff}
+.p-cand .cab{display:flex;gap:12px;align-items:center}
+.p-cand .foto{width:64px;height:64px;border-radius:50%;flex:none;border:2.5px solid var(--linha);background:var(--card2);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:22px;color:var(--tx3);overflow:hidden;position:relative}
+.p-cand.frente .foto{border-color:var(--navy)}
+.p-cand .foto img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.p-cand .tag{display:inline-block;font-size:11.5px;font-weight:900;letter-spacing:.06em;padding:3px 8px;border-radius:6px;background:var(--navy);color:#fff;margin-bottom:4px}
+.p-cand .tag.el{background:var(--ok)}
+.p-cand .nome{font-size:22px;font-weight:900;line-height:1.1;text-transform:uppercase;overflow-wrap:anywhere}
+.p-cand .part{font-size:14px;color:var(--tx2);font-weight:600;margin-top:2px}
+.p-cand .pc{font-size:64px;font-weight:900;line-height:1;margin-top:10px;letter-spacing:-.02em}
+.p-cand .pc sup{font-size:.42em;vertical-align:.95em;margin-left:2px}
+.p-cand .vt{font-size:20px;font-weight:700;margin-top:4px}
+.p-cand .vt small{font-size:.7em;color:var(--tx2);font-weight:600}
+.p-cand .barra{height:10px;background:#d6dce4;border-radius:5px;margin-top:12px;overflow:hidden}
+.p-cand .barra i{display:block;height:100%;background:#5b6b7f;transition:width .5s}
+.p-cand.frente .barra i{background:var(--navy)}
+:root[data-tema="escuro"] .p-cand .barra{background:#2d3b4a} :root[data-tema="escuro"] .p-cand.frente .barra i{background:#7fb2ff}
+.p-dif{background:var(--card2);border-radius:14px;padding:12px 16px;margin-bottom:12px}
+.p-dif b{display:block;font-size:24px;font-weight:900}
+.p-dif span{color:var(--tx2);font-size:14px}
+.p-rec{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px}
+.p-rec .bx{background:var(--card);border:1.5px solid var(--linha);border-radius:14px;padding:12px 14px}
+.p-rec h3{display:flex;justify-content:space-between;align-items:baseline;font-size:18px;margin:0 0 4px}
+.p-rec h3 span{font-size:12.5px;color:var(--tx2);font-weight:600}
+.p-rec .r{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:15px;text-transform:uppercase}
+.p-rec .r b{font-size:20px}
+.p-rec .obs{font-size:12px;color:var(--tx3);margin-top:4px}
+.p-tot{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.p-tot div{background:var(--card);border:1.5px solid var(--linha);border-radius:12px;padding:10px 12px}
+.p-tot span{display:block;font-size:11.5px;font-weight:800;color:var(--tx3);letter-spacing:.04em;text-transform:uppercase}
+.p-tot b{font-size:19px} .p-tot small{font-size:12.5px;color:var(--tx2);font-weight:600}
+.p-fonte{font-size:12px;color:var(--tx3)}
+@media (min-width:700px){ .p-duelo{display:grid;grid-template-columns:1fr 1fr;gap:12px} .p-rec{grid-template-columns:1fr 1fr} .p-tot{grid-template-columns:repeat(5,1fr)} }
+
+/* ---------- pop-up de marcos ---------- */
+.ult-marco{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:1.5px solid var(--linha);border-left:5px solid var(--amarelo);border-radius:14px;padding:10px 14px;margin-bottom:12px;color:var(--tx)}
+.ult-marco .h{font-weight:900;font-size:18px;min-width:52px}
+.ult-marco .t{flex:1;min-width:0;font-size:14px}
+.ult-marco .t small{display:block;color:var(--tx3);font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.ult-marco .novo{background:var(--erro);color:#fff;font-size:11px;font-weight:900;border-radius:20px;padding:3px 8px}
+#popmarco{display:none;position:fixed;inset:0;z-index:50;background:rgba(10,20,35,.55);align-items:flex-end;justify-content:center}
+#popmarco.aberto{display:flex}
+#popmarco .caixa{background:var(--card);color:var(--tx);width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:16px 18px calc(22px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.25);animation:sobe .28s ease-out;max-height:90vh;overflow:auto}
+@media (min-width:600px){ #popmarco{align-items:center} #popmarco .caixa{border-radius:20px} }
+@keyframes sobe{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}
+#popmarco .topo-m{display:flex;justify-content:space-between;align-items:center;gap:10px}
+#popmarco .chip-m{font-size:11.5px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;background:var(--amarelo);color:#1a1a1a;padding:4px 10px;border-radius:20px}
+#popmarco .x{border:0;background:var(--card2);color:var(--tx);width:40px;height:40px;border-radius:50%;font-size:20px;font-weight:700}
+#popmarco .hora-m{font-size:40px;font-weight:900;line-height:1;margin-top:12px}
+#popmarco .hora-m small{font-size:15px;font-weight:700;color:var(--tx3);margin-left:6px}
+#popmarco h2{font-size:21px;line-height:1.2;margin-top:6px;text-wrap:balance}
+#popmarco .sec-m{margin-top:12px}
+#popmarco .sec-m .lin{display:flex;justify-content:space-between;font-size:13.5px;color:var(--tx2);margin-bottom:6px}
+#popmarco .sec-m .lin b{color:var(--tx);font-size:16px}
+#popmarco .snap{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+#popmarco .snap div{background:var(--card2);border-radius:12px;padding:10px 12px}
+#popmarco .snap span{display:block;font-size:11.5px;font-weight:800;color:var(--tx3);letter-spacing:.04em;text-transform:uppercase}
+#popmarco .snap b{font-size:22px}
+#popmarco .snap small{display:block;font-size:12.5px;font-weight:700;margin-top:2px}
+#popmarco .semdado{margin-top:12px;font-size:13.5px;color:var(--tx3)}
+#popmarco .nav-m{display:flex;gap:8px;margin-top:16px}
+#popmarco .nav-m button{flex:1;min-height:48px;border-radius:12px;border:1.5px solid var(--linha);background:var(--card);color:var(--tx);font-weight:800;font-size:15px}
+#popmarco .nav-m button.pri{background:var(--navy);border-color:var(--navy);color:#fff}
+#popmarco .nav-m button[disabled]{opacity:.35}
+#popmarco .pontos{display:flex;justify-content:center;gap:6px;margin-top:12px}
+#popmarco .pontos i{width:8px;height:8px;border-radius:50%;background:var(--linha)}
+#popmarco .pontos i.on{background:var(--navy);width:20px;border-radius:4px}
+:root[data-tema="escuro"] #popmarco .pontos i.on,:root[data-tema="escuro"] #popmarco .nav-m button.pri{background:#7fb2ff;border-color:#7fb2ff;color:#0d141c}
+</style>
+</head>
+<body>
+<header class="topo">
+  <div class="marca"><div class="barras"><i></i><i></i><i></i></div>
+    <h1 id="titulo">Sistema do Candidato<small id="subtitulo">Apuração AM 2026 · uso interno</small></h1></div>
+  <div class="menu-lin">
+    <button class="bt-menu" id="bt-menu" aria-haspopup="true"><span class="ham"><i></i><i></i><i></i></span><span id="aba-nome">Principal</span></button>
+    <button class="pill-turno" id="bt-turno"></button>
+    <button class="bt-acess" id="bt-acess" aria-label="Opções de acessibilidade" aria-haspopup="dialog">Aa</button>
+  </div>
+</header>
+<div id="popmarco" role="dialog" aria-modal="true" aria-labelledby="pm-tit"><div class="caixa" id="pm-caixa"></div></div>
+<div id="menu" role="dialog" aria-label="Abas"><nav id="menu-nav"></nav></div>
+<div id="acess" role="dialog" aria-modal="true" aria-labelledby="acess-tit"><div class="folha">
+  <h2 id="acess-tit">Acessibilidade</h2><div class="nota" style="margin:0 0 8px">As escolhas ficam salvas neste aparelho.</div>
+  <div class="linha-a"><div><b>Tamanho do texto</b><small id="acess-tam">100%</small></div>
+    <div class="grupo"><button id="a-menos" aria-label="Diminuir texto">A−</button><button id="a-normal" aria-label="Texto no tamanho padrão">A</button><button id="a-mais" aria-label="Aumentar texto">A+</button></div></div>
+  <div class="linha-a"><div><b>Alto contraste</b><small>Textos mais escuros e bordas fortes</small></div><button class="chave" id="a-contraste" role="switch" aria-checked="false" aria-label="Alto contraste"></button></div>
+  <div class="linha-a"><div><b>Tema escuro</b><small>Menos brilho em ambiente escuro</small></div><button class="chave" id="a-escuro" role="switch" aria-checked="false" aria-label="Tema escuro"></button></div>
+  <div class="linha-a"><div><b>Reduzir animações</b><small>Sem barras e transições animadas</small></div><button class="chave" id="a-mov" role="switch" aria-checked="false" aria-label="Reduzir animações"></button></div>
+  <div class="linha-a"><div><b>Tela cheia</b><small>Esconde a barra do navegador</small></div><button class="chave" id="a-tela" role="switch" aria-checked="false" aria-label="Tela cheia"></button></div>
+  <button class="fechar" id="a-fechar">Pronto</button>
+</div></div>
+<section class="status" id="status" role="status" aria-live="polite"><div class="l1"><span class="selo s-esp">Conectando…</span><div class="trilho"><i style="width:0"></i></div></div></section>
+<main id="conteudo"><div class="vazio">Carregando…</div></main>
+<footer id="rodape"></footer>
+
+<script>
+/* MODO ESTÁTICO (publicar_candidato.py): retratos da central no GitHub Pages */
+window.__ESTATICO = true;
+window.__ROTA_ESTATICA = function(caminho, versao){
+  var u = new URL(caminho, "http://x"), p = u.pathname.replace(/^\/api\//, "").split("/"), q = u.searchParams;
+  var t = q.get("turno") ? "-t" + q.get("turno") : "", nome;
+  if (p[0] === "meta") return "dados/meta.json?t=" + Date.now();
+  if (p[0] === "locais-votacao") nome = "locais-votacao-" + p[1];
+  else if (p[0] === "brasil") nome = p[1] ? "brasil-" + p[1] + t : "brasil" + t;
+  else if (p[1] === "candidato") nome = p[0] + "-candidato-" + p[2] + t;
+  else if (p[1] === "locais") nome = p[0] + "-locais-" + (q.get("area") || "capital") + t;
+  else nome = p[0] + "-" + p[1] + t;
+  return "dados/" + nome + ".json?v=" + (versao || "0");
+};
+</script>
+<script>
+(function(){
+"use strict";
+var VERSAO = "2.5.0 (06/10/2026)";
+
+/* ======================= configuração ======================= */
+var P = new URLSearchParams(location.search);
+var TURNO = P.get("turno") === "1" || (window.__PROTO && P.get("turno") !== "2") ? 1 : 2;
+var CARGO = P.get("cargo") || "governador";
+var NUM = P.get("candidato") || "55";
+var API = (P.get("api") || "").replace(/\/$/, "");
+var CAPITAL = "02550";
+
+var ABAS = [
+  { id:"principal", nome:"Principal",                 sub:"Duelo, diferença, capital × interior" },
+  { id:"zonas",     nome:"Zonas, bairros e colégios", sub:"Onde estão os votos, por local" },
+  { id:"areas",     nome:"Capital, municípios e geral", sub:"Ranking e totais por área" },
+  { id:"municipio", nome:"Por município",             sub:"Escolha 1 dos 62 municípios" },
+  { id:"colegios",  nome:"Colégios do Omar",          sub:"1º × 2º turno · validação nos 62" },
+  { id:"marcos",    nome:"Marcos da apuração",        sub:"25%, 50%, viradas, decisão" }
+];
+
+/* ======================= API (mesmo domínio) ======================= */
+// Todas as rotas num lugar só. As marcadas NOVO ainda precisam ser criadas no servidor
+// (ver CONTRATO_API.md); enquanto não existem, o app mostra o que já é possível.
+var ROTAS = {
+  meta:        function(){ return "/api/meta"; },
+  visao:       function(area, t){ return "/api/" + CARGO + "/" + area + "?turno=" + t; },        // area: estado | capital | interior
+  candidato:   function(n, t){ return "/api/" + CARGO + "/candidato/" + n + "?turno=" + t; },
+  locaisCad:   function(area){ return "/api/locais-votacao/" + area; },                        // cadastro dos colégios (sem votos)
+  locaisVotos: function(area, t){ return "/api/" + CARGO + "/locais?turno=" + t + "&area=" + area; }, // NOVO: votos por colégio
+  marcos:      function(t){ return "/api/" + CARGO + "/marcos?turno=" + t + "&candidato=" + NUM; }, // marcos registrados pela central
+  stream:      function(){ return "/api/stream"; },
+  visaoCargo:  function(cargo, area, t){ return "/api/" + cargo + "/" + area + "?turno=" + t; },
+  brasil:      function(t){ return "/api/brasil?turno=" + t; },                                 // presidente Brasil + mapa por UF
+  uf:          function(uf, t){ return "/api/brasil/" + uf + "?turno=" + t; }                    // governador de outra UF
+};
+var PROTO = window.__PROTO || null;   // protótipo: dados embutidos no lugar da API
+var cache = {}, versaoDados = null, ultimaAtualizacao = null, conectado = null;
+function api(caminho, opcional){
+  if (cache[caminho]) return cache[caminho];
+  if (PROTO) { conectado = true; var dado = PROTO[caminho]; return Promise.resolve(dado ? JSON.parse(JSON.stringify(dado)) : (opcional ? { __ausente:true } : { status:"sem-dados", candidatos:[] })); }
+  var p = fetch(window.__ESTATICO ? window.__ROTA_ESTATICA(caminho, versaoDados) : API + caminho, { headers:{ Accept:"application/json" }, cache:"no-store" }).then(function(r){
+    if (r.status === 404 && opcional) return { __ausente:true };
+    if (!r.ok) throw new Error("HTTP " + r.status + " em " + caminho);
+    return r.json();
+  }).then(function(j){ conectado = true; return j; }, function(e){ delete cache[caminho]; if (!opcional) conectado = false; if (opcional) return { __ausente:true, erro:String(e.message) }; throw e; });
+  cache[caminho] = p; return p;
+}
+function invalidar(){ cache = {}; }
+function semDados(v){ return !v || v.__ausente || v.status === "sem-dados" || !v.candidatos && !v.candidato && !v.locais; }
+
+/* ======================= formatação ======================= */
+var fI = new Intl.NumberFormat("pt-BR"), fP = new Intl.NumberFormat("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+function I(x){ return x == null || !isFinite(x) ? "—" : fI.format(x); }
+function Pc(x){ return x == null || !isFinite(x) ? "—" : fP.format(x) + "%"; }
+function PP(x){ return x == null || !isFinite(x) ? "—" : (x > 0 ? "+" : "") + fP.format(x) + " p.p."; }
+function esc(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function titulo(t){ return String(t||"").toLowerCase().replace(/(^|\s|-)(\S)/g, function(m, a, b){ return a + b.toUpperCase(); }).replace(/\b(Da|De|Do|Das|Dos|E)\b/g, function(m){ return m.toLowerCase(); }); }
+function curto(n){ var t = titulo(n).replace(/^(Professora?|Prof\.?|Dr\.?|Dra\.?|Delegad[oa]|Capitão|Coronel|Pastor|Sargento|Cabo)\s+/i, ""); var w = t.split(" "); return t.length > 16 ? w.slice(0, w[1] && w[1].length <= 3 ? 3 : 2).join(" ") : t; }
+function zonaNome(z){ return Number(z) + "ª zona"; }
+function hora(iso){ if (!iso) return "—"; var d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString("pt-BR",{timeZone:"America/Manaus",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).replace(",", ""); }
+function norm(t){ return String(t||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase(); }
+function soma(a, f){ return a.reduce(function(s, x){ return s + (f(x) || 0); }, 0); }
+function corDe(c, pad){ return c && c.cor || pad; }
+function foto(sq){ return "fotos/" + encodeURIComponent(sq) + ".jpeg"; }
+function iniciais(n){ return String(n||"?").split(/\s+/).slice(0,2).map(function(p){ return p[0]; }).join(""); }
+
+
+/* ======================= acessibilidade ======================= */
+var PREF = (function(){ try{ return JSON.parse(localStorage.getItem("cand_acess") || "{}"); }catch(e){ return {}; } })();
+function salvarPref(){ try{ localStorage.setItem("cand_acess", JSON.stringify(PREF)); }catch(e){} }
+function aplicarAcess(){
+  var R = document.documentElement, esc = PREF.esc || 1;
+  R.style.setProperty("--esc", esc);
+  var escuro = PREF.escuro != null ? PREF.escuro : (document.documentElement.getAttribute("data-theme") === "dark" || (document.documentElement.getAttribute("data-theme") !== "light" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches));
+  R.setAttribute("data-tema", escuro ? "escuro" : "claro");
+  R.setAttribute("data-contraste", PREF.contraste ? "alto" : "normal");
+  R.setAttribute("data-movimento", PREF.mov ? "reduzido" : "normal");
+  document.getElementById("acess-tam").textContent = Math.round(esc * 100) + "%";
+  document.getElementById("a-contraste").setAttribute("aria-checked", !!PREF.contraste);
+  document.getElementById("a-escuro").setAttribute("aria-checked", !!escuro);
+  document.getElementById("a-mov").setAttribute("aria-checked", !!PREF.mov);
+  document.getElementById("a-tela").setAttribute("aria-checked", !!(document.fullscreenElement || document.webkitFullscreenElement));
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", escuro ? "#0d141c" : "#12355b");
+}
+function mudarEsc(d){ PREF.esc = d === 0 ? 1 : Math.min(1.6, Math.max(0.85, Math.round(((PREF.esc || 1) + d) * 100) / 100)); salvarPref(); aplicarAcess(); }
+document.getElementById("a-menos").onclick = function(){ mudarEsc(-0.1); };
+document.getElementById("a-mais").onclick = function(){ mudarEsc(0.1); };
+document.getElementById("a-normal").onclick = function(){ mudarEsc(0); };
+["contraste", "escuro", "mov"].forEach(function(k){ document.getElementById("a-" + k).onclick = function(){ PREF[k] = !(this.getAttribute("aria-checked") === "true"); salvarPref(); aplicarAcess(); }; });
+document.getElementById("a-tela").onclick = function(){
+  var d = document, el = d.documentElement, p;
+  if (d.fullscreenElement || d.webkitFullscreenElement) p = (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  else if (el.requestFullscreen) p = el.requestFullscreen(); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  Promise.resolve(p).catch(function(){}).then(function(){ setTimeout(aplicarAcess, 300); });
+};
+var focoAntes = null;
+function abrirAcess(){ focoAntes = document.activeElement; document.getElementById("acess").classList.add("aberto"); document.getElementById("a-mais").focus(); }
+function fecharAcess(){ document.getElementById("acess").classList.remove("aberto"); if (focoAntes) focoAntes.focus(); }
+document.getElementById("bt-acess").onclick = abrirAcess;
+document.getElementById("a-fechar").onclick = fecharAcess;
+document.getElementById("acess").onclick = function(e){ if (e.target.id === "acess") fecharAcess(); };
+document.addEventListener("keydown", function(e){ if (e.key === "Escape") { fecharAcess(); fecharMenu(); } });
+aplicarAcess();
+
+/* ======================= menu e rotas ======================= */
+var rota = { aba:"principal", arg:null };
+function lerRota(){
+  var h = location.hash.replace(/^#\/?/, "").split("/");
+  rota = { aba: ABAS.some(function(a){ return a.id === h[0]; }) ? h[0] : "principal", arg: h[1] ? decodeURIComponent(h[1]) : null };
+}
+function ir(aba, arg){ location.hash = "#/" + aba + (arg ? "/" + encodeURIComponent(arg) : ""); }
+window.addEventListener("hashchange", function(){ lerRota(); fecharMenu(); desenhar(); window.scrollTo(0,0); });
+function montarMenu(){
+  document.getElementById("menu-nav").innerHTML = "<h2>Abas</h2>" + ABAS.map(function(a){
+    return '<a href="#/' + a.id + '" class="' + (a.id === rota.aba ? "ativo" : "") + '">' + esc(a.nome) + '<small>' + esc(a.sub) + '</small></a>';
+  }).join("");
+}
+function fecharMenu(){ document.getElementById("menu").classList.remove("aberto"); }
+document.getElementById("bt-menu").onclick = function(){ montarMenu(); document.getElementById("menu").classList.add("aberto"); };
+document.getElementById("menu").onclick = function(e){ if (e.target.id === "menu") fecharMenu(); };
+document.getElementById("bt-turno").textContent = TURNO + "º turno";
+document.getElementById("bt-turno").onclick = function(){
+  if (PROTO) { TURNO = TURNO === 1 ? 2 : 1; this.textContent = TURNO + "º turno"; invalidar(); desenhar(); return; }
+  var q = new URLSearchParams(location.search); if (TURNO === 2) q.set("turno", "1"); else q.delete("turno");
+  location.search = q.toString();
+};
+
+/* ======================= faixa de status ======================= */
+function statusHTML(est){
+  var e = est && est.estado || {}, pct = e.pctSecoes || 0, sel, cls;
+  if (!est || semDados(est)) { sel = "Aguardando dados"; cls = "s-esp"; }
+  else if (est.inconsistente) { sel = "Dado inconsistente"; cls = "s-er"; }
+  else if (est.desatualizado) { sel = "Dado desatualizado"; cls = "s-av"; }
+  else if (e.finalizado) { sel = "Apuração finalizada"; cls = "s-ok"; }
+  else if (pct > 0) { sel = "Em apuração"; cls = "s-and"; }
+  else { sel = "Aguardando início"; cls = "s-esp"; }
+  var idade = ultimaAtualizacao ? Math.round((Date.now() - ultimaAtualizacao) / 1000) : null;
+  return '<div class="l1"><span class="selo ' + cls + '">' + sel + '</span><div class="trilho"><i style="width:' + Math.min(100, pct) + '%"></i></div></div>' +
+    '<div class="l2 num"><b>' + Pc(pct) + '</b><span>' + I(e.secoesTotalizadas) + ' de ' + I(e.secoesTotal) + ' seções totalizadas</span></div>' +
+    '<div class="l3 num">TSE: <b>' + hora(e.geradoEm) + '</b> · Atualizado ' + (idade == null ? "—" : "há " + (idade < 60 ? idade + " s" : Math.round(idade/60) + " min")) +
+    ' · <span class="vivo' + (conectado === false ? ' off' : '') + '">● ' + (PROTO ? "protótipo" : conectado === false ? "sem conexão" : "ao vivo") + '</span>' +
+    (est && est.aviso ? '<div class="aviso">' + esc(est.aviso) + '</div>' : '') + '</div>';
+}
+var estadoAtual = null;
+function atualizarStatus(){ document.getElementById("status").innerHTML = statusHTML(estadoAtual); }
+setInterval(atualizarStatus, 5000);
+
+/* ======================= dados comuns ======================= */
+function base(t){
+  t = t || TURNO;
+  return Promise.all([api(ROTAS.visao("estado", t)), api(ROTAS.candidato(NUM, t), true)]).then(function(r){
+    var est = r[0], eu = r[1];
+    var cands = (est.candidatos || []).filter(function(c){ return !c.anulado; }).slice().sort(function(a, b){ return b.votos - a.votos; });
+    var euC = cands.filter(function(c){ return c.numero === NUM; })[0] || (eu && eu.candidato) || null;
+    var adv = cands.filter(function(c){ return c.numero !== NUM; })[0] || null;
+    return { est:est, eu:eu, euC:euC, adv:adv, cands:cands };
+  });
+}
+function candCard(c, rotulo, cor){
+  return '<div class="cand" style="--cor:' + cor + '">' +
+    (c.sqcand ? '<img src="' + foto(c.sqcand) + '" alt="" onerror="this.outerHTML=\'<div class=ini>' + esc(iniciais(c.nomeUrna)) + '</div>\'">' : '<div class="ini">' + esc(iniciais(c.nomeUrna)) + '</div>') +
+    '<div class="meio"><div class="tag">' + rotulo + '</div><div class="nm">' + esc(titulo(c.nomeUrna || c.nome)) + '</div><div class="pt">' + esc(c.numero) + ' · ' + esc(c.partidoSigla || "") + '</div></div>' +
+    '<div class="dir num"><div class="pc">' + Pc(c.pct) + '</div><div class="vt">' + I(c.votos) + ' votos</div></div></div>';
+}
+function aguardando(msg){ return '<div class="card"><div class="vazio">' + msg + '<div class="nota">O app atualiza sozinho quando os dados chegarem. Para ensaiar com dados reais, toque em "' + (TURNO === 2 ? "2º turno" : "1º turno") + '" no topo e troque de turno.</div></div></div>'; }
+
+/* ======================= ABA 1 · PRINCIPAL (modelo do anexo) ======================= */
+var UFS = { ac:"Acre", al:"Alagoas", ap:"Amapá", am:"Amazonas", ba:"Bahia", ce:"Ceará", df:"Distrito Federal", es:"Espírito Santo", go:"Goiás", ma:"Maranhão", mt:"Mato Grosso", ms:"Mato Grosso do Sul", mg:"Minas Gerais", pa:"Pará", pb:"Paraíba", pr:"Paraná", pe:"Pernambuco", pi:"Piauí", rj:"Rio de Janeiro", rn:"Rio Grande do Norte", rs:"Rio Grande do Sul", ro:"Rondônia", rr:"Roraima", sc:"Santa Catarina", sp:"São Paulo", se:"Sergipe", to:"Tocantins" };
+var PRIN = (function(){ try{ return JSON.parse(localStorage.getItem("cand_principal") || "{}"); }catch(e){ return {}; } })();
+PRIN.cargo = PRIN.cargo || "governador"; PRIN.abr = PRIN.abr || "am";
+function salvarPrin(){ try{ localStorage.setItem("cand_principal", JSON.stringify(PRIN)); }catch(e){} }
+if (PRIN.cargo === "governador" && PRIN.abr === "br") PRIN.abr = "am";
+
+// normaliza qualquer fonte para { estado, resumo, candidatos, recortes, nota, nome }
+function dadosPrincipal(){
+  var c = PRIN.cargo, a = PRIN.abr, t = TURNO;
+  if (a === "am") return Promise.all([api(ROTAS.visaoCargo(c, "estado", t)), api(ROTAS.visaoCargo(c, "capital", t), true), api(ROTAS.visaoCargo(c, "interior", t), true)]).then(function(r){
+    var e = r[0]; return { nome:"Amazonas", estado:e.estado, resumo:e.resumo, candidatos:e.candidatos, aviso:e.aviso, semDados:semDados(e),
+      recortes:[ r[1] && !semDados(r[1]) ? { nome:"Manaus", sec:r[1].resumo && r[1].resumo.pctSecoes, cands:r[1].candidatos, obs:"Totalização: " + hora(r[1].estado && r[1].estado.geradoEm) } : null,
+                 r[2] && !semDados(r[2]) ? { nome:"Interior", sec:r[2].resumo && r[2].resumo.pctSecoes, cands:r[2].candidatos, obs:"61 municípios · calculado: Amazonas − Manaus" } : null ].filter(Boolean) };
+  });
+  if (a === "br") return api(ROTAS.brasil(t)).then(function(b){ var p = b.presidente || {}; return { nome:"Brasil", estado:p.estado || b.estado, resumo:p.resumo, candidatos:p.candidatos, semDados:!p.candidatos || !p.candidatos.length, recortes:[] }; });
+  if (c === "governador") return api(ROTAS.uf(a, t)).then(function(u){ return { nome:UFS[a], estado:u.estado, resumo:u.resumo, candidatos:u.candidatos, semDados:u.disponivel === false || !u.candidatos || !u.candidatos.length, recortes:[],
+    nota:u.disponivel === false ? "Sem 2º turno para governador em " + UFS[a] + "." : null }; });
+  // presidente em outra UF: a API traz os 2 primeiros e os totais da UF
+  return api(ROTAS.brasil(t)).then(function(b){
+    var p = b.presidente || {}, row = (b.mapaPresidente || []).filter(function(x){ return x.uf === a; })[0], u = (b.ufs || []).filter(function(x){ return x.uf === a; })[0] || {};
+    if (!row) return { nome:UFS[a], semDados:true, recortes:[] };
+    var porNum = {}; (p.candidatos || []).forEach(function(k){ porNum[k.numero] = k; });
+    var cands = [row.primeiro, row.segundo].filter(Boolean).map(function(x){ return Object.assign({}, porNum[x.numero] || { numero:x.numero, nomeUrna:x.numero }, { votos:x.votos, pct:x.pct, situacao:"" }); });
+    var apt = row.aptos || 0;
+    return { nome:UFS[a], estado:{ pctSecoes:u.pctSecoes, secoesTotalizadas:u.secoesTotalizadas, secoesTotal:u.secoesTotal, geradoEm:(p.estado || {}).geradoEm, finalizado:row.finalizado },
+      resumo:{ comparecimento:row.comparecimento, pctComparecimento:apt ? row.comparecimento * 100 / apt : null, abstencao:row.abstencao, pctAbstencao:apt ? row.abstencao * 100 / apt : null,
+               validos:row.validos, brancos:row.brancos, pctBrancos:row.totalVotos ? row.brancos * 100 / row.totalVotos : null, nulos:row.nulos, pctNulos:row.totalVotos ? row.nulos * 100 / row.totalVotos : null },
+      candidatos:cands, recortes:[], nota:"Presidente em " + UFS[a] + ": os dois mais votados no estado." };
+  });
+}
+function filtrosHTML(){
+  var c = PRIN.cargo, a = PRIN.abr, outro = a !== "am" && a !== "br";
+  return '<div class="filtros"><div class="rot">Cargo</div>' +
+    '<div class="seg"><button data-act="pcargo" data-k="governador" class="' + (c === "governador" ? "on" : "") + '">Governador<small>' + (outro ? esc(UFS[a]) : "Amazonas") + '</small></button>' +
+    '<button data-act="pcargo" data-k="presidente" class="' + (c === "presidente" ? "on" : "") + '">Presidente<small>' + (a === "br" ? "Brasil" : outro ? esc(UFS[a]) : "no Amazonas") + '</small></button></div>' +
+    '<div class="rot">Abrangência</div>' +
+    '<div class="seg"><button data-act="pabr" data-k="am" class="' + (a === "am" ? "on" : "") + '">Amazonas<small>estado</small></button>' +
+    '<button data-act="pabr" data-k="br" class="' + (a === "br" ? "on" : "") + '"' + (c === "governador" ? ' disabled title="Governador não tem resultado nacional"' : '') + '>Brasil<small>' + (c === "governador" ? "só presidente" : "nacional") + '</small></button>' +
+    '<button data-act="pabr" data-k="outro" class="' + (outro ? "on" : "") + '">Outros estados<small>' + (outro ? esc(UFS[a]) : "escolher") + '</small></button></div>' +
+    (outro || PRIN.escolhendo ? '<select id="sel-uf" aria-label="Escolher estado"><option value="">— escolha o estado —</option>' + Object.keys(UFS).filter(function(k){ return k !== "am"; }).sort(function(x, y){ return UFS[x].localeCompare(UFS[y]); }).map(function(k){ return '<option value="' + k + '"' + (k === a ? " selected" : "") + '>' + UFS[k] + '</option>'; }).join("") + '</select>' : '') +
+    '</div>';
+}
+function vPrincipal(){
+  return Promise.all([base(), dadosPrincipal(), cartaoUltimoMarco()]).then(function(r){
+    var b = r[0], d = r[1]; estadoAtual = PRIN.abr === "am" && PRIN.cargo === CARGO ? b.est : Object.assign({}, b.est, { estado:d.estado || b.est.estado }); atualizarStatus();
+    var h = filtrosHTML() + r[2];
+    var tit = (PRIN.cargo === "governador" ? "Governador" : "Presidente") + " · " + d.nome;
+    if (d.semDados) return h + (d.nota ? '<div class="card"><div class="aviso">' + esc(d.nota) + '</div></div>' : aguardando(tit + ": o " + TURNO + "º turno ainda não tem dados."));
+    var e = d.estado || {}, rs = d.resumo || {};
+    var cs = (d.candidatos || []).filter(function(k){ return !k.anulado; }).slice().sort(function(x, y){ return y.votos - x.votos; });
+    var top = cs.slice(0, 2), temVoto = top.some(function(k){ return k.votos > 0; }), empate = top.length > 1 && top[0].votos === top[1].votos;
+    // seções totalizadas
+    h += '<section class="p-secoes"><div class="rot">' + esc(tit) + ' · seções totalizadas</div><div class="lin"><div class="big num">' + Pc(e.pctSecoes) + '</div>' +
+         '<div class="lado num"><b>' + I(e.secoesTotalizadas) + '</b> de ' + I(e.secoesTotal) + ' seções<br>Totalização: ' + hora(e.geradoEm) + '</div></div>' +
+         '<div class="trilho"><i style="width:' + Math.min(100, e.pctSecoes || 0) + '%"></i></div></section>';
+    // duelo
+    h += '<section class="p-duelo">';
+    top.forEach(function(k, i){
+      var frente = temVoto && i === 0 && !empate, el = /^eleito/i.test(norm(k.situacao)) && !/nao eleito/.test(norm(k.situacao));
+      var tag = el ? '<span class="tag el">ELEITO · TSE</span>' : frente ? '<span class="tag">À FRENTE</span>' : (k.situacao && /turno/i.test(k.situacao) ? '<span class="tag" style="background:var(--tx3)">' + esc(k.situacao.toUpperCase()) + '</span>' : '');
+      h += '<article class="p-cand' + (frente || el ? ' frente' : '') + '"><div class="cab"><div class="foto">' + esc(iniciais(k.nomeUrna)) + (k.sqcand ? '<img src="' + foto(k.sqcand) + '" alt="" onerror="this.remove()">' : '') + '</div>' +
+           '<div>' + tag + '<div class="nome">' + esc(k.nomeUrna || k.nome) + '</div><div class="part">' + esc(k.partidoSigla || "") + ' · ' + esc(k.numero) + '</div></div></div>' +
+           '<div class="pc num">' + fP.format(k.pct || 0) + '<sup>%</sup></div><div class="vt num">' + I(k.votos) + ' <small>votos</small></div>' +
+           '<div class="barra"><i style="width:' + Math.min(100, k.pct || 0) + '%"></i></div></article>';
+    });
+    h += '</section>';
+    if (cs.length > 2) h += '<div class="nota" style="margin:-4px 4px 12px">Mostrando os 2 mais votados de ' + cs.length + ' candidatos. Ranking completo na aba Capital, municípios e geral.</div>';
+    // diferença
+    if (temVoto && top.length === 2) h += '<section class="p-dif num"><b>Diferença: ' + I(top[0].votos - top[1].votos) + ' votos</b><span>' + fP.format((top[0].pct || 0) - (top[1].pct || 0)) + ' pontos percentuais entre ' + esc(top[0].nomeUrna) + ' e ' + esc(top[1].nomeUrna) + '</span></section>';
+    // recortes (Amazonas)
+    if (d.recortes.length) {
+      h += '<section class="p-rec">';
+      d.recortes.forEach(function(rc){
+        var nums = top.map(function(k){ return k.numero; });
+        var l = (rc.cands || []).filter(function(k){ return nums.indexOf(k.numero) >= 0; }).sort(function(x, y){ return y.votos - x.votos; });
+        h += '<div class="bx"><h3>' + esc(rc.nome) + '<span class="num">' + Pc(rc.sec) + ' seções</span></h3>' +
+             l.map(function(k){ return '<div class="r"><span>' + esc(k.nomeUrna) + '</span><b class="num">' + Pc(k.pct) + '</b></div>'; }).join("") + '<div class="obs">' + esc(rc.obs || "") + '</div></div>';
+      });
+      h += '</section>';
+    }
+    // totais
+    h += '<section class="p-tot num">' +
+         '<div><span>Comparecimento</span><b>' + I(rs.comparecimento) + '</b> <small>' + Pc(rs.pctComparecimento) + '</small></div>' +
+         '<div><span>Abstenção</span><b>' + I(rs.abstencao) + '</b> <small>' + Pc(rs.pctAbstencao) + '</small></div>' +
+         '<div><span>Votos válidos</span><b>' + I(rs.validos) + '</b></div>' +
+         '<div><span>Brancos</span><b>' + I(rs.brancos) + '</b> <small>' + Pc(rs.pctBrancos) + '</small></div>' +
+         '<div><span>Nulos</span><b>' + I(rs.nulos) + '</b> <small>' + Pc(rs.pctNulos) + '</small></div></section>';
+    if (d.nota) h += '<div class="nota" style="margin:0 4px 8px">' + esc(d.nota) + '</div>';
+    return h + '<p class="p-fonte">Fonte: Tribunal Superior Eleitoral, consolidado pela central. Percentuais sobre votos válidos.</p>';
+  });
+}
+function totaisCard(v, tit){
+  var r = v.resumo || {};
+  return '<div class="card"><h2>' + tit + '</h2><div class="grid2 num">' +
+    '<div class="kpi"><span>Comparecimento</span><b>' + I(r.comparecimento) + '</b> <small>' + Pc(r.pctComparecimento) + '</small></div>' +
+    '<div class="kpi"><span>Abstenção</span><b>' + I(r.abstencao) + '</b> <small>' + Pc(r.pctAbstencao) + '</small></div>' +
+    '<div class="kpi"><span>Votos válidos</span><b>' + I(r.validos) + '</b></div>' +
+    '<div class="kpi"><span>Total de votos</span><b>' + I(r.totalVotos) + '</b></div>' +
+    (r.brancos != null ? '<div class="kpi"><span>Brancos</span><b>' + I(r.brancos) + '</b></div>' : '') +
+    (r.nulos != null ? '<div class="kpi"><span>Nulos</span><b>' + I(r.nulos) + '</b></div>' : '') +
+    '</div><div class="nota">% dos candidatos sobre votos válidos. Fonte: TSE, consolidado pela central.</div></div>';
+}
+
+/* ======================= ABA 2 · ZONAS, BAIRROS E COLÉGIOS ======================= */
+var zonaArea = "capital", filtroZona = null, filtroBairro = null, buscaLocal = "";
+function vZonas(){
+  var area = zonaArea;
+  return Promise.all([base(), api(ROTAS.visao(area, TURNO), true), api(ROTAS.locaisCad(area), true), api(ROTAS.locaisVotos(area, TURNO), true)]).then(function(r){
+    var b = r[0], vis = r[1], cad = r[2], votos = r[3]; estadoAtual = b.est; atualizarStatus();
+    (cad && cad.locais || []).forEach(function(l){ NOMES_MUN[l.codigo] = l.municipio; }); (vis && vis.zonas || []).forEach(function(z){ (z.municipios || []).forEach(function(m){ NOMES_MUN[m.codigo] = m.nome; }); });
+    var h = seg([["capital","Capital","Manaus"],["interior","Interior","61 municípios"]], area, "zarea");
+    var eu = b.eu && !b.eu.__ausente ? b.eu : null;
+    // zonas
+    var zonas = vis && !semDados(vis) ? (vis.zonas || []) : [];
+    var minhas = {}; (eu ? (area === "capital" ? eu.zonas : eu.zonasInterior) || [] : []).forEach(function(z){ minhas[z.zona] = z; });
+    h += '<div class="card"><h2>Zonas eleitorais · ' + (area === "capital" ? "Manaus" : "interior") + '</h2><div class="sub">Toque numa zona para filtrar bairros e colégios</div>';
+    if (!zonas.length) h += '<div class="aviso">Sem dados de zonas para o ' + TURNO + 'º turno ainda.</div>';
+    else {
+      zonas = zonas.slice().sort(function(a, b2){ return (b2.totalVotos||0) - (a.totalVotos||0); });
+      h += '<div class="tab-wrap"><table class="num"><thead><tr><th>Zona</th><th class="n">Votos</th><th class="n">' + esc(curto(b.euC ? b.euC.nomeUrna : "Candidato")) + '</th><th>1º</th><th class="n col-sec">Seções</th></tr></thead><tbody>';
+      zonas.forEach(function(z){
+        var m = minhas[z.zona] || {}, p1 = z.primeiro || {};
+        h += '<tr data-k="' + esc(z.zona) + '" data-act="zona" class="' + (filtroZona === z.zona ? "sel" : "") + '"><td><b>' + zonaNome(z.zona) + '</b>' + (z.municipios ? '<div class="mini">' + esc(z.municipios.map(function(x){ return titulo(x.nome); }).join(", ")) + '</div>' : '') + '</td>' +
+             '<td class="n">' + I(z.totalVotos) + '</td><td class="n ' + (m.posicao === 1 ? "pos" : "") + '">' + Pc(m.pct) + '<div class="mini">' + (m.posicao ? m.posicao + "º" : "") + '</div></td>' +
+             '<td>' + esc(nomeNum(b, p1.numero)) + '<div class="mini">' + Pc(p1.pct) + '</div></td><td class="n col-sec">' + Pc(z.pctSecoes) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+      if (filtroZona) h += '<button class="mais" data-act="limparzona">Mostrar todas as zonas</button>';
+    }
+    h += '</div>';
+
+    // bairros e colégios (cadastro + votos se o endpoint NOVO existir)
+    var locais = cad && !cad.__ausente ? (cad.locais || []) : [];
+    var temVotos = votos && !votos.__ausente && Array.isArray(votos.locais);
+    var vIdx = {}; if (temVotos) votos.locais.forEach(function(l){ vIdx[chaveLocal(l)] = l; });
+    var lista = locais.filter(function(l){ return (!filtroZona || l.zona === filtroZona) && (!filtroBairro || l.bairro === filtroBairro); });
+    // bairros
+    var bairros = {};
+    locais.filter(function(l){ return !filtroZona || l.zona === filtroZona; }).forEach(function(l){
+      var k = (area === "interior" ? titulo(l.municipio) + " · " : "") + (l.bairro || "SEM BAIRRO");
+      var bb = bairros[k] || (bairros[k] = { nome:k, bairro:l.bairro, locais:0, secoes:0, eleitores:0, eu:0, adv:0, val:0 });
+      bb.locais++; bb.secoes += l.secoes || 0; bb.eleitores += l.eleitores || 0;
+      var v = vIdx[chaveLocal(l)]; if (v) { bb.eu += votoDe(v, NUM); bb.adv += votoDe(v, b.adv && b.adv.numero); bb.val += v.validos || 0; }
+    });
+    var bl = Object.keys(bairros).map(function(k){ return bairros[k]; }).sort(function(a, c){ return c.eleitores - a.eleitores; });
+    if (cad && cad.bairros && !temVotos) bl = cad.bairros.filter(function(x){ return !filtroZona || x.zonas.indexOf(filtroZona) >= 0; }).map(function(x){
+      var partes = x.chave.split("|"), nb = partes.length > 1 ? (nomeMun(partes[0]) + " · " + partes[1]) : partes[0];
+      return { nome:nb || "SEM BAIRRO", bairro:partes[partes.length - 1], locais:x.locais, secoes:x.secoes, eleitores:x.eleitores, eu:0, adv:0, val:0 };
+    });
+    h += '<div class="card"><h2>Bairros' + (filtroZona ? " · " + zonaNome(filtroZona) : "") + '</h2><div class="sub">' + bl.length + ' bairros · ordenados por eleitorado</div>';
+    if (!temVotos) h += '<div class="aviso">Votos por bairro e por colégio ainda não disponíveis na API (endpoint <code>/locais</code>). Por enquanto: eleitorado e seções do cadastro.</div>';
+    h += '<div class="tab-wrap"><table class="num"><thead><tr><th>Bairro</th><th class="n">Colégios</th><th class="n">Eleitores</th>' + (temVotos ? '<th class="n">' + esc(curto(b.euC.nomeUrna)) + '</th><th class="n">Saldo</th>' : '') + '</tr></thead><tbody>';
+    bl.slice(0, filtroBairro ? 999 : 40).forEach(function(x){
+      h += '<tr data-k="' + esc(x.bairro) + '" data-act="bairro" class="' + (filtroBairro === x.bairro ? "sel" : "") + '"><td>' + esc(titulo(x.nome)) + '</td><td class="n">' + x.locais + '</td><td class="n">' + I(x.eleitores) + '</td>' +
+           (temVotos ? '<td class="n">' + Pc(x.val ? x.eu * 100 / x.val : null) + '</td><td class="n ' + (x.eu >= x.adv ? "pos" : "neg") + '">' + I(x.eu - x.adv) + '</td>' : '') + '</tr>';
+    });
+    h += '</tbody></table></div>' + (bl.length > 40 && !filtroBairro ? '<div class="nota">Mostrando os 40 maiores. Use a busca de colégios abaixo para os demais.</div>' : '') + (filtroBairro ? '<button class="mais" data-act="limparbairro">Todos os bairros</button>' : '') + '</div>';
+
+    // colégios
+    var q = norm(buscaLocal);
+    var col = lista.filter(function(l){ return !q || norm(l.nome + " " + l.bairro + " " + l.municipio).indexOf(q) >= 0; })
+                   .sort(function(a, c){ return (c.eleitores||0) - (a.eleitores||0); });
+    h += '<div class="card"><h2>Colégios eleitorais</h2><div class="sub">' + I(col.length) + ' locais' + (filtroZona ? " na " + zonaNome(filtroZona) : "") + (filtroBairro ? " · " + esc(titulo(filtroBairro)) : "") + '</div>' +
+         '<div class="campo"><input id="busca-local" placeholder="Buscar colégio, bairro ou município" value="' + esc(buscaLocal) + '"></div>';
+    col.slice(0, 60).forEach(function(l){
+      var v = vIdx[chaveLocal(l)];
+      h += '<div class="chk" style="grid-template-columns:1fr auto"><div><b>' + esc(titulo(l.nome)) + '</b><div class="det">' + esc(titulo(l.bairro)) + ' · ' + zonaNome(l.zona) + (area === "interior" ? ' · ' + esc(titulo(l.municipio)) : '') + ' · ' + I(l.secoes) + ' seções</div></div>' +
+           '<div class="n num" style="text-align:right">' + (v ? '<b>' + Pc(v.validos ? votoDe(v, NUM) * 100 / v.validos : null) + '</b><div class="det">' + I(votoDe(v, NUM)) + ' votos</div>' : '<b>' + I(l.eleitores) + '</b><div class="det">eleitores</div>') + '</div></div>';
+    });
+    if (col.length > 60) h += '<div class="nota">Mostrando 60 de ' + I(col.length) + '. Refine pela zona, pelo bairro ou pela busca.</div>';
+    if (cad && cad.amostra) h += '<div class="nota">Protótipo: lista reduzida aos maiores colégios de cada ' + (area === "capital" ? "zona" : "município") + '. Bairros e totais usam o cadastro completo.</div>';
+    if (cad && cad.fonte) h += '<div class="nota">Cadastro: ' + esc(cad.fonte) + '.</div>';
+    return h + '</div>';
+  });
+}
+function chaveLocal(l){ return (l.codigo || "") + ":" + (l.zona || "") + ":" + norm(l.nome); }
+function votoDe(l, n){ if (!l || !n) return 0; var c = l.candidatos || {}; return Array.isArray(c) ? (c.filter(function(x){ return x.numero === n; })[0] || {}).votos || 0 : c[n] || 0; }
+var NOMES_MUN = {}; function nomeMun(c){ return titulo(NOMES_MUN[c] || c); }
+function nomeNum(b, n){ var c = b.cands.filter(function(x){ return x.numero === n; })[0]; return c ? curto(c.nomeUrna) : (n || "—"); }
+function seg(op, atual, act){
+  return '<div class="seg">' + op.map(function(o){ return '<button data-act="' + act + '" data-k="' + o[0] + '" class="' + (o[0] === atual ? "on" : "") + '">' + o[1] + '<small>' + o[2] + '</small></button>'; }).join("") + '</div>';
+}
+
+/* ======================= ABA 3 · CAPITAL, MUNICÍPIOS E GERAL ======================= */
+var areaSel = "estado", ordemMun = "votos", filtroCalha = "";
+function vAreas(){
+  return Promise.all([base(), api(ROTAS.visao(areaSel, TURNO), true), api(ROTAS.visao("interior", TURNO), true)]).then(function(r){
+    var b = r[0], v = r[1], intr = r[2]; estadoAtual = b.est; atualizarStatus();
+    var h = seg([["capital","Capital","Manaus"],["interior","Municípios","61 do interior"],["estado","Geral","Capital + interior"]], areaSel, "area");
+    if (semDados(v)) return h + aguardando("Sem dados desta área no " + TURNO + "º turno.");
+    var cs = (v.candidatos || []).slice().sort(function(a, c){ return c.votos - a.votos; });
+    h += '<div class="card"><h2>Votação · ' + (areaSel === "capital" ? "Manaus" : areaSel === "interior" ? "interior (61 municípios)" : "estado") + '</h2><div class="sub num">' + Pc(v.resumo && v.resumo.pctSecoes) + ' das seções da área</div>';
+    cs.forEach(function(c, i){ h += candCard(c, (i + 1) + "º" + (c.situacao ? " · <b>" + esc(c.situacao) + "</b>" : ""), corDe(c, "#999")); });
+    h += '</div>' + totaisCard(v, "Totais da área");
+    if (areaSel !== "capital" && intr && !semDados(intr)) {
+      // calhas
+      var cal = (intr.calhas || []).slice().sort(function(a, c){ return c.totalVotos - a.totalVotos; });
+      if (cal.length) {
+        h += '<div class="card"><h2>Por calha de rio</h2><div class="sub">Soma dos municípios do interior</div><div class="tab-wrap"><table class="num"><thead><tr><th>Calha</th><th class="n">Votos</th><th>1º</th><th class="n">Margem</th></tr></thead><tbody>';
+        cal.forEach(function(c){ var p = c.primeiro || {}; h += '<tr data-act="calha" data-k="' + esc(c.calha) + '"><td>' + esc(titulo(c.calha)) + '<div class="mini">' + c.municipios + ' municípios</div></td><td class="n">' + I(c.totalVotos) + '</td><td>' + esc(nomeNum(b, p.numero)) + '<div class="mini">' + Pc(p.pct) + '</div></td><td class="n">' + fP.format(c.margem || 0) + ' p.p.</td></tr>'; });
+        h += '</tbody></table></div></div>';
+      }
+      // municípios
+      var mun = (intr.municipios || []).filter(function(m){ return !filtroCalha || m.calha === filtroCalha; });
+      mun.sort(ordemMun === "nome" ? function(a, c){ return a.nome.localeCompare(c.nome); } : function(a, c){ return c.totalVotos - a.totalVotos; });
+      h += '<div class="card"><h2>Municípios' + (filtroCalha ? " · " + esc(titulo(filtroCalha)) : "") + '</h2><div class="sub">Toque para abrir o município</div>' +
+           '<div class="campo"><select id="sel-calha"><option value="">Todas as calhas</option>' + cal.map(function(c){ return '<option' + (c.calha === filtroCalha ? " selected" : "") + '>' + esc(c.calha) + '</option>'; }).join("") + '</select>' +
+           '<select id="sel-ordem"><option value="votos"' + (ordemMun === "votos" ? " selected" : "") + '>Mais votos</option><option value="nome"' + (ordemMun === "nome" ? " selected" : "") + '>A–Z</option></select></div>' +
+           '<div class="tab-wrap"><table class="num"><thead><tr><th>Município</th><th>1º</th><th class="n">Margem</th><th class="n">Votos</th></tr></thead><tbody>';
+      mun.forEach(function(m){ var p = m.primeiro || {}; h += '<tr data-act="abrirmun" data-k="' + esc(m.codigo) + '"><td><b>' + esc(titulo(m.nome)) + '</b><div class="mini">' + Pc(m.pctSecoes) + ' seções</div></td><td>' + esc(nomeNum(b, p.numero)) + '<div class="mini">' + Pc(p.pct) + '</div></td><td class="n">' + fP.format(m.margem || 0) + ' p.p.</td><td class="n">' + I(m.totalVotos) + '</td></tr>'; });
+      h += '</tbody></table></div></div>';
+    }
+    if (areaSel === "capital" && (v.zonas || []).length) h += '<div class="card"><h2>Zonas de Manaus</h2><div class="sub">Detalhe na aba Zonas, bairros e colégios</div><button class="mais" data-act="irzonas">Abrir zonas, bairros e colégios</button></div>';
+    return h;
+  });
+}
+
+/* ======================= ABA 4 · POR MUNICÍPIO ======================= */
+function vMunicipio(){
+  return Promise.all([base(), api(ROTAS.visao("interior", TURNO), true), api(ROTAS.visao("capital", TURNO), true), api(ROTAS.locaisCad(rota.arg === CAPITAL ? "capital" : "interior"), true)]).then(function(r){
+    var b = r[0], intr = r[1], cap = r[2], cad = r[3]; estadoAtual = b.est; atualizarStatus();
+    var lista = [{ codigo:CAPITAL, nome:"MANAUS" }].concat(intr && intr.municipios ? intr.municipios.slice().sort(function(a, c){ return a.nome.localeCompare(c.nome); }) : []);
+    var cod = rota.arg || "";
+    var h = '<div class="card"><h2>Escolha o município</h2><div class="campo"><select id="sel-mun"><option value="">— ' + lista.length + ' municípios —</option>' +
+            lista.map(function(m){ return '<option value="' + m.codigo + '"' + (m.codigo === cod ? " selected" : "") + '>' + esc(titulo(m.nome)) + (m.codigo === CAPITAL ? " (capital)" : "") + '</option>'; }).join("") + '</select></div></div>';
+    if (!cod) return h;
+    var advN = b.adv ? b.adv.numero : null;
+    return Promise.all([api(ROTAS.candidato(NUM, TURNO), true), advN ? api(ROTAS.candidato(advN, TURNO), true) : null]).then(function(rr){
+      var e1 = rr[0], e2 = rr[1], linha, mEu, mAdv, nome;
+      if (cod === CAPITAL) { nome = "Manaus"; linha = cap && cap.resumo ? Object.assign({}, cap.resumo, { totalVotos:cap.resumo.totalVotos }) : null; mEu = e1 && e1.capital; mAdv = e2 && e2.capital; }
+      else {
+        linha = (intr.municipios || []).filter(function(m){ return m.codigo === cod; })[0]; nome = linha ? titulo(linha.nome) : cod;
+        mEu = e1 && (e1.municipios || []).filter(function(m){ return m.codigo === cod; })[0];
+        mAdv = e2 && (e2.municipios || []).filter(function(m){ return m.codigo === cod; })[0];
+      }
+      if (!linha) return h + aguardando("Sem dados de " + esc(nome) + " no " + TURNO + "º turno.");
+      h += '<div class="card acento" style="border-left-color:' + corDe(b.euC, "#e67700") + '"><h2>' + esc(nome) + '</h2><div class="sub num">' + (linha.calha ? esc(titulo(linha.calha)) + ' · ' : '') + Pc(linha.pctSecoes) + ' das seções</div>';
+      if (mEu) h += candCard(Object.assign({}, b.euC, { votos:mEu.votos, pct:mEu.pct }), (mEu.posicao ? "<b>" + mEu.posicao + "º no município</b>" : ""), corDe(b.euC, "#e67700"));
+      if (mAdv && b.adv) h += candCard(Object.assign({}, b.adv, { votos:mAdv.votos, pct:mAdv.pct }), "Adversário", corDe(b.adv, "#1c3f94"));
+      if (mEu && mAdv) { var d = mEu.votos - mAdv.votos; h += '<div class="dif num">Saldo no município: <b class="' + (d >= 0 ? "pos" : "neg") + '">' + (d > 0 ? "+" : "") + I(d) + ' votos</b> · ' + PP(mEu.pct - mAdv.pct) + '</div>'; }
+      h += '<div class="grid2 num"><div class="kpi"><span>Comparecimento</span><b>' + I(linha.comparecimento) + '</b></div><div class="kpi"><span>Abstenção</span><b>' + I(linha.abstencao) + '</b></div>' +
+           '<div class="kpi"><span>Votos válidos</span><b>' + I(linha.validos) + '</b></div><div class="kpi"><span>Brancos / nulos</span><b>' + I(linha.brancos) + ' / ' + I(linha.nulos) + '</b></div></div></div>';
+      // zonas do município
+      var zs = cod === CAPITAL ? (cap.zonas || []) : (intr.zonas || []).filter(function(z){ return (z.municipios || []).some(function(m){ return m.codigo === cod; }); });
+      if (zs.length) {
+        h += '<div class="card"><h2>Zonas que atendem ' + esc(nome) + '</h2>' + (cod !== CAPITAL ? '<div class="sub">No interior, a zona soma todos os municípios que ela atende</div>' : '') + '<div class="tab-wrap"><table class="num"><thead><tr><th>Zona</th><th>1º</th><th class="n">Votos</th></tr></thead><tbody>';
+        zs.forEach(function(z){ var p = z.primeiro || {}; h += '<tr><td>' + zonaNome(z.zona) + '</td><td>' + esc(nomeNum(b, p.numero)) + ' <span class="mini">' + Pc(p.pct) + '</span></td><td class="n">' + I(z.totalVotos) + '</td></tr>'; });
+        h += '</tbody></table></div></div>';
+      }
+      // colégios do município (cadastro)
+      var cl = cad && cad.locais ? cad.locais.filter(function(l){ return l.codigo === cod; }).sort(function(a, c){ return c.eleitores - a.eleitores; }) : [];
+      if (cl.length) {
+        h += '<div class="card"><h2>Colégios de ' + esc(nome) + '</h2><div class="sub">' + cl.length + ' locais · ' + I(soma(cl, function(x){ return x.eleitores; })) + ' eleitores</div>';
+        cl.slice(0, 40).forEach(function(l){ h += '<div class="chk" style="grid-template-columns:1fr auto"><div><b>' + esc(titulo(l.nome)) + '</b><div class="det">' + esc(titulo(l.bairro)) + ' · ' + zonaNome(l.zona) + ' · ' + l.secoes + ' seções</div></div><div class="num"><b>' + I(l.eleitores) + '</b><div class="det">eleitores</div></div></div>'; });
+        h += (cl.length > 40 ? '<div class="nota">Lista completa na aba Zonas, bairros e colégios.</div>' : '') + '</div>';
+      }
+      return h;
+    });
+  });
+}
+
+/* ======================= ABA 5 · COLÉGIOS DO OMAR (1º × 2º) + VALIDAÇÃO 62 ======================= */
+var ordemCmp = "variacao", calhaCmp = "";
+function vColegios(){
+  return Promise.all([
+    api(ROTAS.candidato(NUM, 1), true), api(ROTAS.candidato(NUM, 2), true),
+    api(ROTAS.visao("interior", 1), true), api(ROTAS.visao("estado", TURNO), true),
+    api(ROTAS.locaisVotos("capital", 1), true), api(ROTAS.locaisVotos("capital", 2), true)
+  ]).then(function(r){
+    var t1 = r[0], t2 = r[1], intr = r[2], est = r[3], lv1 = r[4], lv2 = r[5]; estadoAtual = est; atualizarStatus();
+    var c = t1 && t1.candidato || t2 && t2.candidato || { nomeUrna:"Candidato" }, nome = titulo(c.nomeUrna);
+    var ok1 = t1 && !t1.__ausente && t1.municipios, ok2 = t2 && !t2.__ausente && t2.municipios;
+    var h = '<div class="card acento" style="border-left-color:' + corDe(c, "#e67700") + '"><h2>' + esc(nome) + ': 1º × 2º turno</h2><div class="sub">Por município e na capital · % sobre os votos válidos de cada lugar</div>';
+    if (!ok1) return h + '<div class="erro">Dados do 1º turno indisponíveis.</div></div>';
+    if (!ok2) h += '<div class="aviso">O 2º turno ainda não tem dados. A tabela mostra o 1º turno; a coluna do 2º turno e a variação aparecem sozinhas quando a apuração começar.</div>';
+    // estado / capital / interior
+    h += '<div class="tab-wrap"><table class="num"><thead><tr><th>Área</th><th class="n">1º turno</th><th class="n">2º turno</th><th class="n">Variação</th></tr></thead><tbody>';
+    [["Estado","estado"],["Manaus","capital"],["Interior","interior"]].forEach(function(l){
+      var a = t1[l[1]] || {}, z = ok2 ? t2[l[1]] || {} : {};
+      h += '<tr><td><b>' + l[0] + '</b></td><td class="n">' + Pc(a.pct) + '<div class="mini">' + I(a.votos) + '</div></td><td class="n">' + Pc(z.pct) + '<div class="mini">' + I(z.votos) + '</div></td><td class="n ' + cls(z.pct - a.pct) + '">' + (ok2 ? PP(z.pct - a.pct) : "—") + '</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+
+    // tabela dos 62
+    var calhaDe = {}; (intr && intr.municipios || []).forEach(function(m){ calhaDe[m.codigo] = m.calha; });
+    var m2 = {}; if (ok2) t2.municipios.forEach(function(m){ m2[m.codigo] = m; });
+    var linhas = [{ codigo:CAPITAL, nome:"MANAUS", a:t1.capital, b:ok2 ? t2.capital : null, calha:"CAPITAL" }].concat(t1.municipios.map(function(m){ return { codigo:m.codigo, nome:m.nome, a:m, b:m2[m.codigo] || null, calha:calhaDe[m.codigo] || "" }; }));
+    var calhas = Object.keys(linhas.reduce(function(o, x){ if (x.calha) o[x.calha] = 1; return o; }, {})).sort();
+    var vis = linhas.filter(function(x){ return !calhaCmp || x.calha === calhaCmp; });
+    vis.sort(ordemCmp === "nome" ? function(x, y){ return x.nome.localeCompare(y.nome); } : ordemCmp === "votos" ? function(x, y){ return (y.a.votos||0) - (x.a.votos||0); } :
+             function(x, y){ return ((x.b ? x.b.pct : 0) - (x.a.pct||0)) - ((y.b ? y.b.pct : 0) - (y.a.pct||0)); });
+    h += '<div class="card"><h2>Os 62 municípios</h2><div class="sub">Ordenar e filtrar por calha</div><div class="campo">' +
+         '<select id="sel-ord-cmp"><option value="variacao"' + (ordemCmp === "variacao" ? " selected" : "") + '>Maior queda primeiro</option><option value="votos"' + (ordemCmp === "votos" ? " selected" : "") + '>Mais votos no 1º</option><option value="nome"' + (ordemCmp === "nome" ? " selected" : "") + '>A–Z</option></select>' +
+         '<select id="sel-calha-cmp"><option value="">Todas as calhas</option>' + calhas.map(function(k){ return '<option' + (k === calhaCmp ? " selected" : "") + '>' + esc(k) + '</option>'; }).join("") + '</select></div>' +
+         '<div class="tab-wrap"><table class="num"><thead><tr><th>Município</th><th class="n">1º</th><th class="n">2º</th><th class="n">Var.</th></tr></thead><tbody>';
+    vis.forEach(function(x){
+      var d = x.b ? x.b.pct - x.a.pct : null;
+      h += '<tr data-act="abrirmun" data-k="' + x.codigo + '"><td><b>' + esc(titulo(x.nome)) + '</b><div class="mini">' + esc(titulo(x.calha)) + '</div></td><td class="n">' + Pc(x.a.pct) + '<div class="mini">' + I(x.a.votos) + '</div></td>' +
+           '<td class="n">' + (x.b ? Pc(x.b.pct) + '<div class="mini">' + I(x.b.votos) + ' · ' + Pc(x.b.pctSecoes) + ' seç.</div>' : '—') + '</td><td class="n ' + cls(d) + '">' + (d == null ? "—" : PP(d)) + '</td></tr>';
+    });
+    h += '</tbody></table></div><div class="nota">Durante a apuração, a variação compara o 1º turno final com o 2º turno parcial; confira a coluna de seções.</div></div>';
+
+    // validação nos 62
+    h += validacao62(t1, ok2 ? t2 : null, linhas);
+
+    // colégio a colégio (endpoint NOVO)
+    var temCol = lv1 && !lv1.__ausente && Array.isArray(lv1.locais);
+    h += '<div class="card"><h2>Colégio a colégio</h2><div class="sub">Manaus · ' + esc(nome) + ' no 1º e no 2º turno</div>';
+    if (!temCol) h += '<div class="aviso">Aguardando o endpoint de votos por colégio na API (<code>' + esc(ROTAS.locaisVotos("capital", 1)) + '</code>). A especificação está no CONTRATO_API.md. Assim que existir, esta tabela e a validação por colégio aparecem aqui.</div>';
+    else {
+      var i2 = {}; if (lv2 && !lv2.__ausente && lv2.locais) lv2.locais.forEach(function(l){ i2[chaveLocal(l)] = l; });
+      var cols = lv1.locais.map(function(l){ var b2 = i2[chaveLocal(l)], p1 = l.validos ? votoDe(l, NUM) * 100 / l.validos : null, p2 = b2 && b2.validos ? votoDe(b2, NUM) * 100 / b2.validos : null; return { l:l, p1:p1, p2:p2, d:p2 == null || p1 == null ? null : p2 - p1 }; });
+      cols.sort(function(x, y){ return (x.d == null ? 99 : x.d) - (y.d == null ? 99 : y.d); });
+      h += '<div class="tab-wrap"><table class="num"><thead><tr><th>Colégio</th><th class="n">1º</th><th class="n">2º</th><th class="n">Var.</th></tr></thead><tbody>';
+      cols.slice(0, 80).forEach(function(x){ h += '<tr><td><b>' + esc(titulo(x.l.nome)) + '</b><div class="mini">' + esc(titulo(x.l.bairro)) + ' · ' + zonaNome(x.l.zona) + '</div></td><td class="n">' + Pc(x.p1) + '</td><td class="n">' + Pc(x.p2) + '</td><td class="n ' + cls(x.d) + '">' + (x.d == null ? "—" : PP(x.d)) + '</td></tr>'; });
+      h += '</tbody></table></div>';
+      var somaCol = soma(lv1.locais, function(l){ return votoDe(l, NUM); });
+      h += chkHTML(somaCol === (t1.capital || {}).votos, "Soma dos colégios de Manaus = votos do candidato na capital (1º turno)", I(somaCol) + " × " + I((t1.capital || {}).votos));
+    }
+    return h + '</div>';
+  });
+}
+function cls(d){ return d == null || !isFinite(d) ? "" : d >= 0 ? "pos" : "neg"; }
+function chkHTML(ok, tit, det){ return '<div class="chk"><span class="ic ' + (ok === true ? "s-ok" : ok === false ? "s-er" : "s-esp") + '">' + (ok === true ? "OK" : ok === false ? "✕" : "…") + '</span><div>' + esc(tit) + (det ? '<div class="det num">' + esc(det) + '</div>' : '') + '</div></div>'; }
+function validacao62(t1, t2, linhas){
+  var h = '<div class="card"><h2>Validação nos 62 municípios</h2><div class="sub">Confere se o detalhe por município fecha com o total do estado</div>';
+  [[1, t1], [2, t2]].forEach(function(par){
+    var t = par[0], d = par[1];
+    h += '<h3>' + t + 'º turno</h3>';
+    if (!d) { h += chkHTML(null, "Aguardando dados do " + t + "º turno"); return; }
+    var mun = d.municipios || [], cap = d.capital || {}, intr = d.interior || {}, est = d.estado || {};
+    var codigos = {}; mun.forEach(function(m){ codigos[m.codigo] = 1; });
+    var n = Object.keys(codigos).length + (cap.votos != null ? 1 : 0);
+    h += chkHTML(n === 62 && !codigos[CAPITAL], "62 municípios presentes (61 do interior + Manaus)", n + " encontrados" + (mun.length !== Object.keys(codigos).length ? " · há código repetido" : ""));
+    var sInt = soma(mun, function(m){ return m.votos; });
+    h += chkHTML(sInt === intr.votos, "Soma dos 61 municípios = interior", I(sInt) + " × " + I(intr.votos));
+    h += chkHTML((intr.votos || 0) + (cap.votos || 0) === est.votos, "Capital + interior = estado", I(cap.votos) + " + " + I(intr.votos) + " = " + I((intr.votos||0) + (cap.votos||0)) + " × " + I(est.votos));
+    var ruins = mun.filter(function(m){ return !(m.pct >= 0 && m.pct <= 100) || m.votos < 0; });
+    h += chkHTML(ruins.length === 0, "Percentuais entre 0% e 100% em todos os municípios", ruins.length ? ruins.map(function(m){ return titulo(m.nome); }).join(", ") : "62 de 62");
+    var incompletos = mun.filter(function(m){ return (m.pctSecoes || 0) < 100; }).length + ((cap.pctSecoes != null && cap.pctSecoes < 100) ? 1 : 0);
+    h += chkHTML(incompletos === 0 ? true : null, "Municípios com 100% das seções", incompletos ? incompletos + " ainda em apuração" : "todos completos");
+  });
+  return h + '</div>';
+}
+
+/* ======================= ABA 6 · MARCOS DA APURAÇÃO ======================= */
+function chaveMarcos(){ return "cand_marcos_" + CARGO + "_t" + TURNO; }
+function lerMarcos(){ try{ return JSON.parse(localStorage.getItem(chaveMarcos()) || "[]"); }catch(e){ return []; } }
+function gravarMarcos(m){ try{ localStorage.setItem(chaveMarcos(), JSON.stringify(m)); }catch(e){} }
+// registra marcos a partir de cada atualização recebida enquanto o app está aberto
+function registrarMarcos(b){
+  if (!b || semDados(b.est) || !b.euC) return;
+  var e = b.est.estado || {}, pct = e.pctSecoes || 0, m = lerMarcos(), tem = function(id){ return m.some(function(x){ return x.id === id; }); };
+  var foto = { pct:pct, tse:e.geradoEm, visto:new Date().toISOString(), eu:b.euC.pct, adv:b.adv ? b.adv.pct : null, dif:b.adv ? b.euC.votos - b.adv.votos : null, lider:b.cands[0] && b.cands[0].numero };
+  function add(id, titulo){ if (!tem(id)) m.push(Object.assign({ id:id, titulo:titulo }, foto)); }
+  if (pct > 0) add("inicio", "Primeiros votos");
+  [25, 50, 75].forEach(function(p){ if (pct >= p) add("p" + p, p + "% das seções"); });
+  if (pct >= 100) add("p100", "100% das seções");
+  if (e.finalizado) add("fim", "Totalização finalizada pelo TSE");
+  var ult = m.filter(function(x){ return x.lider; }).slice(-1)[0];
+  if (ult && ult.lider !== foto.lider && pct > 0) m.push(Object.assign({ id:"virada" + m.length, titulo:"Troca de liderança: " + titulo(nomeNum(b, foto.lider)) + " passa à frente" }, foto));
+  gravarMarcos(m);
+}
+function vMarcos(){
+  return Promise.all([base(), api(ROTAS.marcos(TURNO), true)]).then(function(r){
+    var b = r[0], srv = r[1]; estadoAtual = b.est; atualizarStatus(); registrarMarcos(b);
+    var h = '<div class="card"><h2>Marcos da apuração · ' + TURNO + 'º turno</h2>';
+    var lista, fonte;
+    if (srv && !srv.__ausente && Array.isArray(srv.marcos)) { lista = srv.marcos; fonte = srv.fonte || "Registrados pelo servidor durante toda a noite."; }
+    else { lista = lerMarcos(); fonte = "Registrados por este aparelho enquanto o app esteve aberto. Quando o endpoint de marcos existir na API, a lista passa a ser a oficial do sistema, igual para todos."; }
+    h += '<div class="sub">' + esc(fonte) + '</div>';
+    if (!lista.length) h += '<div class="vazio">Nenhum marco ainda.</div>';
+    (srv && !srv.__ausente ? lista : lista.slice().reverse()).forEach(function(x){
+      h += '<div class="marco num"><div class="h">' + hora(x.tse || x.em).slice(-8, -3) + '<div class="mini">' + hora(x.tse || x.em).slice(0, 5) + '</div></div><div><div class="t">' + esc(x.titulo) + '</div><div class="d">' + (x.pct != null ? Pc(x.pct) + ' das seções' : '') +
+           (x.eu != null ? ' · ' + esc(titulo(b.euC ? b.euC.nomeUrna : "")) + ' ' + Pc(x.eu) : '') + (x.dif != null ? ' · saldo ' + (x.dif > 0 ? "+" : "") + I(x.dif) : '') + '</div></div></div>';
+    });
+    if (!(srv && !srv.__ausente)) h += '<button class="mais" data-act="limparmarcos">Apagar marcos deste aparelho</button>';
+    return h + '</div>';
+  });
+}
+
+
+/* ======================= POP-UP DE MARCOS (aba principal) ======================= */
+// Mostra sozinho o marco mais recente que este aparelho ainda não viu; dá para navegar entre os marcos.
+var listaMarcos = [], idxMarco = 0;
+function chaveVistos(){ return "cand_marcos_vistos_" + CARGO + "_t" + TURNO; }
+function lerVistos(){ try{ return JSON.parse(localStorage.getItem(chaveVistos()) || "[]"); }catch(e){ return []; } }
+function marcarVisto(id){ var v = lerVistos(); if (v.indexOf(id) < 0) { v.push(id); try{ localStorage.setItem(chaveVistos(), JSON.stringify(v)); }catch(e){} } }
+function obterMarcos(){
+  return api(ROTAS.marcos(TURNO), true).then(function(srv){
+    var l = srv && !srv.__ausente && Array.isArray(srv.marcos) ? srv.marcos.slice() : lerMarcos();
+    return l.filter(function(x){ return x && x.titulo; }).sort(function(a, b){ return String(a.tse || a.visto || "").localeCompare(String(b.tse || b.visto || "")); });
+  });
+}
+function cartaoUltimoMarco(){
+  return obterMarcos().then(function(l){
+    if (!l.length) return "";
+    var u = l[l.length - 1], vistos = lerVistos(), novos = l.filter(function(x){ return vistos.indexOf(x.id) < 0; }).length;
+    return '<button class="ult-marco" data-act="abrirmarco"><div class="h num">' + hora(u.tse || u.visto).slice(-8, -3) + '</div><div class="t"><small>Último marco · ' + l.length + ' no ' + TURNO + 'º turno</small>' + esc(u.titulo) + '</div>' +
+           (novos ? '<span class="novo">' + novos + ' novo' + (novos > 1 ? "s" : "") + '</span>' : '<span aria-hidden="true">›</span>') + '</button>';
+  });
+}
+function verificarPopupMarcos(){
+  if (rota.aba !== "principal" || document.getElementById("popmarco").classList.contains("aberto")) return;
+  obterMarcos().then(function(l){
+    var vistos = lerVistos(), naoVistos = l.filter(function(x){ return vistos.indexOf(x.id) < 0; });
+    if (!naoVistos.length) return;
+    abrirPopupMarco(l, l.indexOf(naoVistos[naoVistos.length - 1]));
+  });
+}
+function abrirPopupMarco(l, i){
+  listaMarcos = l; idxMarco = Math.max(0, Math.min(i, l.length - 1));
+  var pop = document.getElementById("popmarco"); pop.classList.add("aberto"); desenharPopupMarco();
+  var bt = document.getElementById("pm-fechar"); if (bt) bt.focus();
+}
+function fecharPopupMarco(){
+  listaMarcos.forEach(function(x){ marcarVisto(x.id); });   // ao fechar, todos contam como vistos
+  document.getElementById("popmarco").classList.remove("aberto");
+  if (rota.aba === "principal") desenhar();
+}
+function desenharPopupMarco(){
+  var m = listaMarcos[idxMarco], ant = null; if (!m) return;
+  for (var j = idxMarco - 1; j >= 0; j--) if (listaMarcos[j].eu != null) { ant = listaMarcos[j]; break; }
+  marcarVisto(m.id);
+  var nome = curto((estadoAtual && (estadoAtual.candidatos || []).filter(function(c){ return c.numero === NUM; })[0] || {}).nomeUrna || "Omar Aziz");
+  var h = '<div class="topo-m"><span class="chip-m">Marco da apuração · ' + (idxMarco + 1) + '/' + listaMarcos.length + '</span><button class="x" id="pm-fechar" aria-label="Fechar">×</button></div>' +
+          '<div class="hora-m num">' + hora(m.tse || m.visto).slice(-8, -3) + '<small>' + hora(m.tse || m.visto).slice(0, 5) + '</small></div>' +
+          '<h2 id="pm-tit">' + esc(m.titulo) + '</h2>';
+  if (m.pct != null) h += '<div class="sec-m"><div class="lin"><span>Seções totalizadas</span><b class="num">' + Pc(m.pct) + '</b></div><div class="trilho"><i style="width:' + Math.min(100, m.pct) + '%"></i></div></div>';
+  if (m.eu != null || m.dif != null) {
+    var dEu = ant && m.eu != null ? m.eu - ant.eu : null, dDif = ant && m.dif != null && ant.dif != null ? m.dif - ant.dif : null;
+    h += '<div class="snap num">' +
+         (m.eu != null ? '<div><span>' + esc(nome) + '</span><b>' + Pc(m.eu) + '</b>' + (dEu != null ? '<small class="' + cls(dEu) + '">' + PP(dEu) + ' desde o marco anterior</small>' : '') + '</div>' : '') +
+         (m.dif != null ? '<div><span>Saldo sobre o 2º</span><b class="' + cls(m.dif) + '">' + (m.dif > 0 ? "+" : "") + I(m.dif) + '</b>' + (dDif != null ? '<small class="' + cls(dDif) + '">' + (dDif > 0 ? "+" : "") + I(dDif) + ' votos desde o anterior</small>' : '') + '</div>' : '') +
+         '</div>';
+  } else h += '<div class="semdado">Sem retrato dos votos neste marco: o registro traz só o horário' + (m.pct != null ? ' e o andamento' : '') + '.</div>';
+  h += '<div class="nav-m"><button id="pm-ant"' + (idxMarco === 0 ? " disabled" : "") + '>‹ Anterior</button>' +
+       (idxMarco < listaMarcos.length - 1 ? '<button id="pm-prox" class="pri">Próximo ›</button>' : '<button id="pm-ok" class="pri">Entendi</button>') + '</div>' +
+       '<div class="pontos" aria-hidden="true">' + listaMarcos.map(function(_, k){ return '<i class="' + (k === idxMarco ? "on" : "") + '"></i>'; }).join("") + '</div>' +
+       '<div class="nav-m"><button id="pm-todos">Ver todos na aba Marcos</button></div>';
+  document.getElementById("pm-caixa").innerHTML = h;
+  document.getElementById("pm-fechar").onclick = fecharPopupMarco;
+  var a = document.getElementById("pm-ant"), p = document.getElementById("pm-prox"), ok = document.getElementById("pm-ok");
+  if (a) a.onclick = function(){ idxMarco--; desenharPopupMarco(); };
+  if (p) p.onclick = function(){ idxMarco++; desenharPopupMarco(); };
+  if (ok) ok.onclick = fecharPopupMarco;
+  document.getElementById("pm-todos").onclick = function(){ fecharPopupMarco(); ir("marcos"); };
+}
+document.getElementById("popmarco").addEventListener("click", function(e){ if (e.target.id === "popmarco") fecharPopupMarco(); });
+document.addEventListener("keydown", function(e){
+  if (!document.getElementById("popmarco").classList.contains("aberto")) return;
+  if (e.key === "Escape") fecharPopupMarco();
+  else if (e.key === "ArrowRight" && idxMarco < listaMarcos.length - 1) { idxMarco++; desenharPopupMarco(); }
+  else if (e.key === "ArrowLeft" && idxMarco > 0) { idxMarco--; desenharPopupMarco(); }
+});
+
+/* ======================= desenho e eventos ======================= */
+var VIEWS = { principal:vPrincipal, zonas:vZonas, areas:vAreas, municipio:vMunicipio, colegios:vColegios, marcos:vMarcos };
+var desenhando = 0;
+function desenhar(){
+  var aba = ABAS.filter(function(a){ return a.id === rota.aba; })[0];
+  document.getElementById("aba-nome").textContent = aba.nome;
+  document.title = aba.nome + " · Sistema do Candidato";
+  var id = ++desenhando, el = document.getElementById("conteudo");
+  if (!el.dataset.aba || el.dataset.aba !== rota.aba) el.innerHTML = '<div class="vazio">Carregando…</div>';
+  VIEWS[rota.aba]().then(function(h){
+    if (id !== desenhando) return;
+    var y = window.scrollY; el.innerHTML = h; el.dataset.aba = rota.aba; window.scrollTo(0, y);
+    ultimaAtualizacao = ultimaAtualizacao || Date.now(); atualizarStatus();
+    if (rota.aba === "principal") setTimeout(verificarPopupMarcos, 400);
+    var bl = document.getElementById("busca-local");
+    if (bl) bl.oninput = debounce(function(){ buscaLocal = bl.value; desenhar(); }, 350);
+  }).catch(function(e){
+    if (id !== desenhando) return;
+    conectado = false; atualizarStatus();
+    if (!el.dataset.aba) el.innerHTML = '<div class="card"><div class="erro">Não foi possível falar com a API: ' + esc(e.message) + '</div><div class="nota">O app tenta de novo sozinho.</div></div>';
+  });
+}
+function debounce(f, ms){ var t; return function(){ clearTimeout(t); t = setTimeout(f, ms); }; }
+document.getElementById("conteudo").addEventListener("click", function(e){
+  var t = e.target.closest("[data-act]"); if (!t) return;
+  var k = t.dataset.k, a = t.dataset.act;
+  if (a === "zona") { filtroZona = filtroZona === k ? null : k; filtroBairro = null; desenhar(); }
+  else if (a === "limparzona") { filtroZona = null; desenhar(); }
+  else if (a === "bairro") { filtroBairro = filtroBairro === k ? null : k; desenhar(); }
+  else if (a === "limparbairro") { filtroBairro = null; desenhar(); }
+  else if (a === "zarea") { zonaArea = k; filtroZona = filtroBairro = null; buscaLocal = ""; desenhar(); }
+  else if (a === "area") { areaSel = k; desenhar(); }
+  else if (a === "calha") { filtroCalha = k; areaSel = "interior"; desenhar(); }
+  else if (a === "abrirmun") ir("municipio", k);
+  else if (a === "irzonas") { zonaArea = "capital"; ir("zonas"); }
+  else if (a === "abrirmarco") obterMarcos().then(function(l){ if (l.length) abrirPopupMarco(l, l.length - 1); });
+  else if (a === "pcargo") { PRIN.cargo = k; if (k === "governador" && PRIN.abr === "br") PRIN.abr = "am"; salvarPrin(); desenhar(); }
+  else if (a === "pabr") { if (k === "outro") { PRIN.escolhendo = true; desenhar(); } else { PRIN.abr = k; PRIN.escolhendo = false; salvarPrin(); desenhar(); } }
+  else if (a === "limparmarcos") { if (t.dataset.ok) { gravarMarcos([]); desenhar(); } else { t.dataset.ok = "1"; t.textContent = "Toque de novo para apagar"; setTimeout(function(){ if (t.isConnected) { delete t.dataset.ok; t.textContent = "Apagar marcos deste aparelho"; } }, 4000); } }
+});
+document.getElementById("conteudo").addEventListener("change", function(e){
+  var id = e.target.id;
+  if (id === "sel-mun") ir("municipio", e.target.value);
+  else if (id === "sel-uf") { if (e.target.value) { PRIN.abr = e.target.value; PRIN.escolhendo = false; salvarPrin(); desenhar(); } }
+  else if (id === "sel-calha") { filtroCalha = e.target.value; desenhar(); }
+  else if (id === "sel-ordem") { ordemMun = e.target.value; desenhar(); }
+  else if (id === "sel-ord-cmp") { ordemCmp = e.target.value; desenhar(); }
+  else if (id === "sel-calha-cmp") { calhaCmp = e.target.value; desenhar(); }
+});
+
+/* ======================= ao vivo: stream da API + reserva por consulta ======================= */
+function novaVersao(v){
+  if (v != null && v === versaoDados) return;
+  versaoDados = v; invalidar(); ultimaAtualizacao = Date.now(); conectado = true; desenhar();
+  if (rota.aba !== "marcos") base().then(registrarMarcos).catch(function(){});
+}
+function conectarStream(){
+  if (!("EventSource" in window)) return consultar();
+  var es = new EventSource(API + ROTAS.stream());
+  es.addEventListener("hello", function(e){ try{ novaVersao(JSON.parse(e.data).versao); }catch(x){} });
+  es.addEventListener("update", function(e){ try{ novaVersao(JSON.parse(e.data).versao); }catch(x){ novaVersao(null); } });
+  es.onerror = function(){ /* o navegador reconecta sozinho; o status de conexão vem da consulta a /api/meta */ };
+  es.onopen = function(){ conectado = true; atualizarStatus(); };
+}
+function consultar(){ // reserva: a cada 20 s confere a versão em /api/meta
+  setInterval(function(){ fetch(window.__ESTATICO ? window.__ROTA_ESTATICA(ROTAS.meta()) : API + ROTAS.meta(), {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(m){ conectado = true; novaVersao(m.versao); }).catch(function(){ conectado = false; atualizarStatus(); }); }, 20000);
+}
+
+document.getElementById("rodape").textContent = "Uso interno da campanha · não divulgar. Fonte: TSE, via central SESMT01 (retrato publicado). Versão " + VERSAO + ".";
+if (PROTO) { document.getElementById("subtitulo").textContent = "PROTÓTIPO · dados reais do 1º turno"; conectado = true; lerRota(); desenhar(); }
+else { lerRota(); if (window.__ESTATICO) { fetch(window.__ROTA_ESTATICA(ROTAS.meta()), {cache:"no-store"}).then(function(r){ return r.json(); }).then(function(m){ versaoDados = m.versao; desenhar(); }, function(){ desenhar(); }); consultar(); } else { desenhar(); conectarStream(); consultar(); } }
+})();
+</script>
+</body>
+</html>
