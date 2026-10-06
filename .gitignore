@@ -1,0 +1,6 @@
+﻿Thumbs.db
+.DS_Store
+*.zip
+__pycache__/
+*.db
+config.json
